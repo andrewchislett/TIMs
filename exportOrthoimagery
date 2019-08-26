@@ -1,0 +1,79 @@
+# -----------------------------------------------------------------------
+# Script Name:	exportOrthoimagery.py
+# Script Label:	Export Orthoimagery 2
+# Version:      2.0
+# Description:	Copy selected TIF or SID tiled images to another folder.
+# Created by: 	achislet
+# Date created:	February 13, 2014
+# Last edit:	  June 19, 2014
+# Tested on:	  ArcGIS 10.2.1 for Desktop
+# -----------------------------------------------------------------------
+
+import arcpy, os, shutil
+
+# Parameter values
+#	0 - Reference Layer (feature layer)
+#	1 - Reference Field (field)
+#	2 - Image Format (string: TIF or SID)
+#	3 - Image Source (folder)
+#	4 - Destination Location (folder)
+#	5 - Add Images to Data Frame? (boolean)
+#
+refLayer = arcpy.GetParameterAsText(0)
+refField = arcpy.GetParameterAsText(1)
+imageFormat = arcpy.GetParameterAsText(2)
+imageSource = arcpy.GetParameterAsText(3)
+dst = arcpy.GetParameterAsText(4)
+addImages = arcpy.GetParameterAsText(5)
+
+# Setup
+#
+MXD = arcpy.mapping.MapDocument("CURRENT")
+DF = arcpy.mapping.ListDataFrames(MXD,"*")[0]
+refLayerPath = ""
+
+os.mkdir(dst)
+
+# (refLayer,refLayerPath)
+#
+def getFolder():
+	for i in arcpy.mapping.ListLayers(MXD):
+		if i.name == refLayer:
+			refLayerPath = i.dataSource
+			copyFolder, ext = os.path.splitext(refLayerPath)
+			return copyFolder
+			
+copyFolder = getFolder()
+
+# Store selected tiles in array
+#
+selected = []
+for i in arcpy.SearchCursor(refLayer):
+	selected.append(str(i.getValue(refField)))
+
+# getImage() takes user's selected tiles and image format and exports
+#	
+def getImage():
+	j = 0
+	unavailable = 0
+	arcpy.SetProgressor("step","Exporting...",0,len(selected),)
+	
+	for i in selected:
+		src = i + "." + imageFormat
+		j += 1
+		arcpy.SetProgressorLabel('Exporting {0} ({1} of {2})'.format(src,j,len(selected)))
+		src = os.path.join(imageSource,src)
+		
+		if os.path.exists(src):
+			shutil.copy(src,dst)
+			arcpy.SetProgressorPosition()
+		else:
+			unavailable += 1
+			arcpy.AddMessage(src + ' not available and cannot be copied.')
+		
+	return unavailable
+
+# call getImage()
+#
+unavailable = getImage()
+arcpy.AddWarning('Export Complete: {0} copied, {1} unavailable.'.format((len(selected) - unavailable),unavailable))
